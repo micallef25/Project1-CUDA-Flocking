@@ -230,11 +230,80 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities) 
 * in the `pos` and `vel` arrays.
 */
 __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *pos, const glm::vec3 *vel) {
-  // Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
-  // Rule 2: boids try to stay a distance d away from each other
-  // Rule 3: boids try to match the speed of surrounding boids
-  return glm::vec3(0.0f, 0.0f, 0.0f);
+  
+    float distance = 0.0f;	
+    int neighbor1 = 0;
+    int neighbor3 = 0;
+
+    glm::vec3 v1 = glm::vec3(0.0f,0.0f,0.0f);
+    glm::vec3 v2 = glm::vec3(0.0f,0.0f,0.0f);
+    glm::vec3 v3 = glm::vec3(0.0f,0.0f,0.0f);
+	glm::vec3 own_velocity = glm::vec3(0.0f, 0.0f, 0.0f);
+    
+    glm::vec3 perceived_center = glm::vec3(0.0f,0.0f,0.0f); 
+    glm::vec3 perceived_velocity = glm::vec3(0.0f,0.0f,0.0f); 
+    glm::vec3 small_distance_away = glm::vec3(0.0f,0.0f,0.0f); 
+    
+    // search through all positions and give appropriate weights based on our position.
+	// if we have alot of neighbors we will give weight to stay close
+	// if we have an enemy near we will give weight to avoid.
+	for (int i = 0; i < N; i++)
+	{
+		if( i != iSelf)
+		{
+			distance = glm::distance(pos[i], pos[iSelf]);
+			
+			// give weight if we are close enough
+            // rule 1
+			if (distance < rule1Distance)
+			{
+			    perceived_center += pos[i];	
+                neighbor1++;
+			}
+
+			// give weight if we are close enough
+            // rule 2
+			if (distance < rule2Distance)
+            {
+                small_distance_away -= (pos[i] - pos[iSelf]);
+			}
+            
+            // rule 3
+			if (distance < rule3Distance)
+			{
+				neighbor3++;
+                perceived_velocity += vel[i];
+			}
+
+		}
+        else
+        {
+            own_velocity = vel[i];
+        }
+	}
+	
+	// our weights are calculated. now we can scale appropriately	
+	// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
+	if (neighbor1)
+	{
+		perceived_center /= neighbor1;
+		v1 = (perceived_center - pos[iSelf]) * rule1Scale;
+	}
+
+	// Rule 2: boids try to stay a distance d away from each other
+    v2 = small_distance_away * rule2Scale; 
+  
+  
+	// Rule 3: boids try to match the speed of surrounding boids. Avoid div by zero
+    if(neighbor3)
+    {
+        perceived_velocity /= neighbor3;
+        v3 = perceived_velocity * rule3Scale;
+    }
+
+   return v1+v2+v3+own_velocity;
 }
+    
 
 /**
 * TODO-1.2 implement basic flocking
@@ -242,9 +311,28 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
 */
 __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
   glm::vec3 *vel1, glm::vec3 *vel2) {
-  // Compute a new velocity based on pos and vel1
+  int tid = threadIdx.x + (blockIdx.x * blockDim.x); 
+
+  // no work to be done for this thread
+  if( tid >= N )
+      return;
+
+  // compute the speed algo based off psuedo code in parkinsons notes
+  // http://www.vergenet.net/~conrad/boids/pseudocode.htmlZZ
+  glm::vec3 new_velocity = computeVelocityChange(N,tid,pos,vel1);
+
+  
   // Clamp the speed
+  if( glm::length(new_velocity) > maxSpeed )
+	  new_velocity = glm::normalize(new_velocity) * maxSpeed; // returns a vector in the same direction but with length of 1
+  
+  
+  
   // Record the new velocity into vel2. Question: why NOT vel1?
+  // we are reading from vel1 in computechange thus we do not want to overwrite the data for another thread.
+  vel2[tid] = new_velocity;
+
+
 }
 
 /**
@@ -349,6 +437,16 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 void Boids::stepSimulationNaive(float dt) {
   // TODO-1.2 - use the kernels you wrote to step the simulation forward in time.
   // TODO-1.2 ping-pong the velocity buffers
+  dim3 blockspergrid((numObjects + blockSize -1) / blockSize );
+
+  kernUpdateVelocityBruteForce <<< blockspergrid, blockSize >>>(numObjects, dev_pos, dev_vel1, dev_vel2);
+  checkCUDAErrorWithLine("brute force failed");
+
+  kernUpdatePos <<< blockspergrid,blockSize >>>(numObjects,dt, dev_pos,dev_vel1);
+  checkCUDAErrorWithLine("update pos failed");
+
+  // ping pong the buffer
+  std::swap( dev_vel1, dev_vel2 );
 }
 
 void Boids::stepSimulationScatteredGrid(float dt) {
