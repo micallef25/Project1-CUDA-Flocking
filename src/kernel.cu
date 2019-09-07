@@ -152,8 +152,7 @@ void Boids::initSimulation(int N) {
   checkCUDAErrorWithLine("cudaMalloc dev_vel2 failed!");
 
   // LOOK-1.2 - This is a typical CUDA kernel invocation.
-  kernGenerateRandomPosArray<<<fullBlocksPerGrid, blockSize>>>(1, numObjects,
-    dev_pos, scene_scale);
+  kernGenerateRandomPosArray<<<fullBlocksPerGrid, blockSize>>>(1, numObjects,dev_pos, scene_scale);
   checkCUDAErrorWithLine("kernGenerateRandomPosArray failed!");
 
   // LOOK-2.1 computing grid params
@@ -382,8 +381,8 @@ __global__ void kernComputeIndices(int N, int gridResolution,
   
   // TODO-2.1
     // - Label each boid with the index of its grid cell. unsure why we use grind min ... 
-  glm::ivec3 BoidPos = ( pos[tid] - gridMin ) * inverseCellWidth
-  gridIndices[tid] = gridIndex3Dto1d(BoidPos.x, BoidPos.y, BoidPos.z,gridResolution);
+  glm::ivec3 BoidPos = (pos[tid] - gridMin) * inverseCellWidth;
+  gridIndices[tid] = gridIndex3Dto1D(BoidPos.x, BoidPos.y, BoidPos.z,gridResolution);
     // - Set up a parallel array of integer indices as pointers to the actual
     //   boid data in pos and vel1/vel2
   indices[tid] = tid;
@@ -485,13 +484,13 @@ void Boids::stepSimulationNaive(float dt) {
 
 void Boids::stepSimulationScatteredGrid(float dt) {
   // TODO-2.1
-  
-  dim3 blockspergrid((numObjects + blockSize - 1) / blockSize);
+  dim3 blockspergrid((gridCellCount + blockSize - 1) / blockSize);
+  dim3 boidsblockspergrid((numObjects + blockSize - 1) / blockSize);
   // Reset the buffers to -1 indicating nothing init'd
   kernResetIntBuffer <<< blockspergrid,blockSize >>>(gridCellCount, dev_gridCellStartIndices, -1);
   kernResetIntBuffer <<< blockspergrid,blockSize >>>(gridCellCount,dev_gridCellEndIndices, -1);
  
-  kernComputeIndices << < blockspergrid, blockSize >> > (numObjects, gridResolution, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+  kernComputeIndices << < blockspergrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
 
   thrust::device_ptr<int> keys(dev_particleGridIndices);
   thrust::device_ptr<int> values(dev_particleArrayIndices);
