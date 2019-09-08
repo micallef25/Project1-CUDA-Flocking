@@ -6,6 +6,8 @@ Project 1 - Flocking**
   
 * Tested on: Windows 10, i7-6700 @ 3.4GHz 16GB, Nvidia Quadro P1000 (Moore 100B Lab)
 
+### 10000 Boids Video
+
 [![Watch the video](https://img.youtube.com/vi/PD1hAzGXRkg/0.jpg)](https://youtu.be/PD1hAzGXRkg)
 
 ### Performance Analysis
