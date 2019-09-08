@@ -12,7 +12,7 @@ Project 1 - Flocking**
 ## Boids Graph
 
 
-![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/boids.PNG)
+![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/boids.png)
 
 ## Boids Raw
 
@@ -24,7 +24,7 @@ Project 1 - Flocking**
 
 ## Blocksize Graph
 
-![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/blocksize.PNG)
+![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/blocksize.png)
 
 
 
