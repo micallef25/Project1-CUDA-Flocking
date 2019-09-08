@@ -254,19 +254,19 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities) 
 * this for the grid based search we want to clamp so we are not checking sometihng potentially far away 
 * or something that would be on the other side of the grid.
 */
-__device__ void clamp_x_y_z(int* x, int* y, int* z)
+__device__ void clamp_x_y_z(int* x, int* y, int* z, int resolution)
 {
 	// now make sure nothing is going to wrap around or go out of bounds
 	// ie if x was 0 so and we added -1 we want to check 0 for now
-	(*neighbor_x) = imax( (*neighbor_x), 0);
-	(*neighbor_y) = imax( (*neighbor_y), 0);
-	(*neighbor_z) = imax( (*neighbor_z), 0);
+	(*x) = imax( (*x), 0);
+	(*y) = imax( (*y), 0);
+	(*z) = imax( (*z), 0);
 
 	// now to make sure we don't wrap around the other way...
 	// ie if our max was 10 and we are in position 10 and added 1 we would be at 11 so set to grid max for now
-	(*neighbor_x) = imin( (*neighbor_x), gridResolution-1);
-	(*neighbor_y) = imin( (*neighbor_y), gridResolution-1);
-	(*neighbor_z) = imin( (*neighbor_z), gridResolution-1);
+	(*x) = imin( (*x), resolution -1);
+	(*y) = imin( (*y), resolution -1);
+	(*z) = imin( (*z), resolution-1);
 }
 
 /*
@@ -545,7 +545,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				int neighbor_z = boid.z + k;
 				
 				// clamp our neighbors
-				clamp_x_y_z(&neighbor_x,&neighbor_y,&neighbor_z);
+				clamp_x_y_z(&neighbor_x,&neighbor_y,&neighbor_z, gridResolution);
 				
 				// now convert to a grid position
 				int Cell = gridIndex3Dto1D(neighbor_x, neighbor_y, neighbor_z, gridResolution);
@@ -646,6 +646,8 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 	// search through all positions and give appropriate weights based on our position.
 	// if we have alot of neighbors we will give weight to stay close
 	// if we have an enemy near we will give weight to avoid.
+	// thi s loop is changed from x.y.z to y,z,x so that we can read memory sequentially
+	// the with z.y.x the call to grindIndex3dto1d is more sequential
 	for (int k = MIN_NEIGHBORS; k <= MAX_NEIGHBORS; k++)
 		for (int j = MIN_NEIGHBORS; j <= MAX_NEIGHBORS; j++)
 			for (int i = MIN_NEIGHBORS; i <= MAX_NEIGHBORS; i++)
@@ -655,7 +657,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 				int neighbor_y = boid.y + j;
 				int neighbor_z = boid.z + k;
 
-				clamp_x_y_z(&neighbor_x,&neighbor_y,&neighbor_z);
+				clamp_x_y_z(&neighbor_x,&neighbor_y,&neighbor_z, gridResolution);
 
 				// now convert to a grid position
 				int Cell = gridIndex3Dto1D(neighbor_x, neighbor_y, neighbor_z, gridResolution);
