@@ -250,6 +250,10 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities) 
   cudaDeviceSynchronize();
 }
 
+/*
+* this for the grid based search we want to clamp so we are not checking sometihng potentially far away 
+* or something that would be on the other side of the grid.
+*/
 __device__ void clamp_x_y_z(int* x, int* y, int* z)
 {
 	// now make sure nothing is going to wrap around or go out of bounds
@@ -265,10 +269,13 @@ __device__ void clamp_x_y_z(int* x, int* y, int* z)
 	(*neighbor_z) = imin( (*neighbor_z), gridResolution-1);
 }
 
+/*
+* these rules are based off the parkinsons notes found here http://www.vergenet.net/~conrad/boids/pseudocode.html
+*/
 __device__ void compute_rules(int my_tid, int neighbor1, int neighbor3, glm::vec3* perceived_center, glm::vec3* perceived_velocity, glm::vec3* small_distance_away, glm::vec3* v1, glm::vec3* v2, glm::vec3* v3, const glm::vec3* pos )
 {
 	// our weights are calculated. now we can scale appropriately	
-// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
+	// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
 	if (neighbor1)
 	{
 		(*perceived_center) /= neighbor1;
@@ -288,10 +295,13 @@ __device__ void compute_rules(int my_tid, int neighbor1, int neighbor3, glm::vec
 	return;
 }
 
+/*
+* this is also based off the pseduo code from the notes http://www.vergenet.net/~conrad/boids/pseudocode.html
+*/
 __device__ void determine_distances(int my_tid, int other_tid, float distance, int* neighbor1, int* neighbor3, glm::vec3* perceived_center, glm::vec3* perceived_velocity, glm::vec3* small_distance_away, const glm::vec3* pos, const glm::vec3* vel)
 {
 	// give weight if we are close enough
-			// rule 1
+	// rule 1
 	if (distance < rule1Distance)
 	{
 		(*perceived_center) += pos[other_tid];
@@ -334,7 +344,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
     glm::vec3 v1 = glm::vec3(0.0f,0.0f,0.0f);
     glm::vec3 v2 = glm::vec3(0.0f,0.0f,0.0f);
     glm::vec3 v3 = glm::vec3(0.0f,0.0f,0.0f);
-	glm::vec3 own_velocity = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 own_velocity = glm::vec3(0.0f, 0.0f, 0.0f);
     
     glm::vec3 perceived_center = glm::vec3(0.0f,0.0f,0.0f); 
     glm::vec3 perceived_velocity = glm::vec3(0.0f,0.0f,0.0f); 
@@ -534,12 +544,13 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				int neighbor_y = boid.y + j;
 				int neighbor_z = boid.z + k;
 				
+				// clamp our neighbors
 				clamp_x_y_z(&neighbor_x,&neighbor_y,&neighbor_z);
 				
 				// now convert to a grid position
 				int Cell = gridIndex3Dto1D(neighbor_x, neighbor_y, neighbor_z, gridResolution);
 
-				// is there even anything in the grid?
+				// is there even anything in the grid? remember we reset these every dt step
 				if (gridCellStartIndices[Cell] != -1)
 				{
 					// traverse through start until end
@@ -561,7 +572,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				}
 			}
 
-
+	// copute our velocities
 	compute_rules(tid, neighbor1, neighbor3, &perceived_center, &perceived_velocity, &small_distance_away, &v1, &v2, &v3, pos);
 
 	glm::vec3 new_velocity = v1 + v2 + v3 + own_velocity;
@@ -573,7 +584,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 	vel2[tid] = new_velocity;
 }
 
-// copy to the coherent buffers.
+// copy to the coherent buffers. so we have one less level of indirection and a few less memory reads per thread in our main loop
+// make a kern so many threads can compute quickly
 __global__ void kernCreateCoherentBuffs(int N, int* particlearray, glm::vec3* pos, glm::vec3* vel, glm::vec3* coherentpos, glm::vec3* coherentvel)
 {
 	int tid = threadIdx.x + (blockIdx.x * blockDim.x);
@@ -759,6 +771,8 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // - Perform velocity updates using neighbor search
   // - Update positions
   // - Ping-pong buffers as needed. THIS MAY BE DIFFERENT FROM BEFORE.
+	
+	// same methdology as the scattered grid approach
 	dim3 blockspergrid((gridCellCount + blockSize - 1) / blockSize);
 	dim3 boidsblockspergrid((numObjects + blockSize - 1) / blockSize);
 	// Reset the buffers to -1 indicating nothing init'd
@@ -778,7 +792,8 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 
 	kernIdentifyCellStartEnd << < boidsblockspergrid, blockSize >> > (numObjects ,dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
 	checkCUDAErrorWithLine("cell end");
-
+	
+	// the difference between grid and coherent. create our coherent buffer and use that in update
 	kernCreateCoherentBuffs << < boidsblockspergrid, blockSize >> > (numObjects, dev_particleArrayIndices,dev_pos,dev_vel1, dev_CoherentPos, dev_CoherentVel);
 
 	kernUpdateVelNeighborSearchCoherent << < boidsblockspergrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_CoherentPos, dev_CoherentVel, dev_vel2);
@@ -797,7 +812,7 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 	kernUpdatePos << < blockspergrid, blockSize >> > (numObjects, dt, dev_CoherentPos, dev_vel2);
 	checkCUDAErrorWithLine("update pos failed");
 
-	//
+	// ping pong th position this is important because when we create the buffers we read from the last position.
 	std::swap(dev_CoherentPos, dev_pos);
 
 	// - Ping-pong buffers as needed
