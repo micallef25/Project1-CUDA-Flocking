@@ -250,6 +250,21 @@ void Boids::copyBoidsToVBO(float *vbodptr_positions, float *vbodptr_velocities) 
   cudaDeviceSynchronize();
 }
 
+__device__ void clamp_x_y_z(int* x, int* y, int* z)
+{
+	// now make sure nothing is going to wrap around or go out of bounds
+	// ie if x was 0 so and we added -1 we want to check 0 for now
+	(*neighbor_x) = imax( (*neighbor_x), 0);
+	(*neighbor_y) = imax( (*neighbor_y), 0);
+	(*neighbor_z) = imax( (*neighbor_z), 0);
+
+	// now to make sure we don't wrap around the other way...
+	// ie if our max was 10 and we are in position 10 and added 1 we would be at 11 so set to grid max for now
+	(*neighbor_x) = imin( (*neighbor_x), gridResolution-1);
+	(*neighbor_y) = imin( (*neighbor_y), gridResolution-1);
+	(*neighbor_z) = imin( (*neighbor_z), gridResolution-1);
+}
+
 __device__ void compute_rules(int my_tid, int neighbor1, int neighbor3, glm::vec3* perceived_center, glm::vec3* perceived_velocity, glm::vec3* small_distance_away, glm::vec3* v1, glm::vec3* v2, glm::vec3* v3, const glm::vec3* pos )
 {
 	// our weights are calculated. now we can scale appropriately	
@@ -519,18 +534,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 				int neighbor_y = boid.y + j;
 				int neighbor_z = boid.z + k;
 				
-				// now make sure nothing is going to wrap around or go out of bounds
-				// ie if x was 0 so and we added -1 we want to check 0 for now
-				neighbor_x = imax(neighbor_x, 0);
-				neighbor_y = imax(neighbor_y, 0);
-				neighbor_z = imax(neighbor_z, 0);
-
-				// now to make sure we don't wrap around the other way...
-				// ie if our max was 10 and we are in position 10 and added 1 we would be at 11 so set to grid max for now
-				neighbor_x = imin(neighbor_x, gridResolution-1);
-				neighbor_y = imin(neighbor_y, gridResolution-1);
-				neighbor_z = imin(neighbor_z, gridResolution-1);
-
+				clamp_x_y_z(&neighbor_x,&neighbor_y,&neighbor_z);
+				
 				// now convert to a grid position
 				int Cell = gridIndex3Dto1D(neighbor_x, neighbor_y, neighbor_z, gridResolution);
 
@@ -638,17 +643,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 				int neighbor_y = boid.y + j;
 				int neighbor_z = boid.z + k;
 
-				// now make sure nothing is going to wrap around or go out of bounds
-				// ie if x was 0 so and we added -1 we want to check 0 for now
-				neighbor_x = imax(neighbor_x, 0);
-				neighbor_y = imax(neighbor_y, 0);
-				neighbor_z = imax(neighbor_z, 0);
-
-				// now to make sure we don't wrap around the other way...
-				// ie if our max was 10 and we are in position 10 and added 1 we would be at 11 so set to grid max for now
-				neighbor_x = imin(neighbor_x, gridResolution - 1);
-				neighbor_y = imin(neighbor_y, gridResolution - 1);
-				neighbor_z = imin(neighbor_z, gridResolution - 1);
+				clamp_x_y_z(&neighbor_x,&neighbor_y,&neighbor_z);
 
 				// now convert to a grid position
 				int Cell = gridIndex3Dto1D(neighbor_x, neighbor_y, neighbor_z, gridResolution);
