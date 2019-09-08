@@ -31,19 +31,23 @@ void checkCUDAError(const char *msg, int line = -1) {
   }
 }
 
-#define NEIGHBORS 8
+//#define NEIGHBORS 81
 /*****************
 * Configuration *
 *****************/
 
 // change to something more mathematical...
-#ifdef NEIGHBORS == 8
-	#define MIN_NEIGHBORS -1
-	#define MAX_NEIGHBORS 1
-#elif NEIGHBORS == 27
+//#ifdef NEIGHBORS == 8
 	#define MIN_NEIGHBORS -2
 	#define MAX_NEIGHBORS 2
-#endif
+//#elif NEIGHBORS == 27
+//	#define MIN_NEIGHBORS -2
+//	#define MAX_NEIGHBORS 2
+//#elif NEIGHBORS == 81
+//	#define MIN_NEIGHBORS -3
+//	#define MAX_NEIGHBORS 3
+//#endif
+
 /*! Block size used for CUDA kernel launch. */
 #define blockSize 128
 
@@ -329,32 +333,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
 		if( i != iSelf)
 		{
 			distance = glm::distance(pos[i], pos[iSelf]);
-
-			//determine_distances(int my_tid, int other_tid, float distance, int* neighbor1, int* neighbor3, glm::vec3* perceived_center, glm::vec3* perceived_velocity, glm::vec3* small_distance_away, glm::vec3* pos, glm::vec3 vel)
 			determine_distances(iSelf, i, distance, &neighbor1, &neighbor3, &perceived_center, &perceived_velocity, &small_distance_away, pos, vel);
-			
-			// give weight if we are close enough
-            // rule 1
-			//if (distance < rule1Distance)
-			//{
-			   // perceived_center += pos[i];	
-               // neighbor1++;
-			//}
-
-			// give weight if we are close enough
-            // rule 2
-			//if (distance < rule2Distance)
-            //{
-              //  small_distance_away -= (pos[i] - pos[iSelf]);
-			//}
-            
-            // rule 3
-			//if (distance < rule3Distance)
-			//{
-			//	neighbor3++;
-            //    perceived_velocity += vel[i];
-			//}
-
 		}
         else
         {
@@ -363,27 +342,7 @@ __device__ glm::vec3 computeVelocityChange(int N, int iSelf, const glm::vec3 *po
 	}
 	
 	compute_rules(iSelf, neighbor1, neighbor3, &perceived_center, &perceived_velocity, &small_distance_away, &v1, &v2, &v3, pos);
-
-	// our weights are calculated. now we can scale appropriately	
-	// Rule 1: boids fly towards their local perceived center of mass, which excludes themselves
-	//if (neighbor1)
-	//{
-	//	perceived_center /= neighbor1;
-	//	v1 = (perceived_center - pos[iSelf]) * rule1Scale;
-	//}
-
-	// Rule 2: boids try to stay a distance d away from each other
-    //v2 = small_distance_away * rule2Scale; 
-  
-  
-	// Rule 3: boids try to match the speed of surrounding boids. Avoid div by zero
-    //if(neighbor3)
-    //{
-    //    perceived_velocity /= neighbor3;
-    //    v3 = perceived_velocity * rule3Scale;
-    //}
-
-   return v1+v2+v3+own_velocity;
+    return v1+v2+v3+own_velocity;
 }
     
 
@@ -408,8 +367,7 @@ __global__ void kernUpdateVelocityBruteForce(int N, glm::vec3 *pos,
   if( glm::length(new_velocity) > maxSpeed )
 	  new_velocity = glm::normalize(new_velocity) * maxSpeed; // returns a vector in the same direction but with length of 1
   
-  
-  
+ 
   // Record the new velocity into vel2. Question: why NOT vel1?
   // we are reading from vel1 in computechange thus we do not want to overwrite the data for another thread.
   vel2[tid] = new_velocity;
@@ -849,9 +807,6 @@ void Boids::stepSimulationCoherentGrid(float dt) {
 
 	// - Ping-pong buffers as needed
 	std::swap(dev_vel1, dev_vel2);
-
-
-
 }
 
 void Boids::endSimulation() {
