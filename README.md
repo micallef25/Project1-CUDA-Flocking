@@ -7,22 +7,20 @@ Project 1 - Flocking**
 * Tested on: Windows 10, i7-6700 @ 3.4GHz 16GB, Nvidia Quadro P1000 (Moore 100B Lab)
 
 
-### (TODO: Your README)
+#For each implementation, how does changing the number of boids affect performance? Why do you think this is?
 
-For each implementation, how does changing the number of boids affect performance? Why do you think this is?
-
-## Boids Graph
+**Boids Graph**
 ![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/boids.png)
 
-## Boids Raw
+**Boids Raw**
 ![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/boidsraw.PNG)
 
-For each implementation, how does changing the block count and block size affect performance? Why do you think this is?
+#For each implementation, how does changing the block count and block size affect performance? Why do you think this is?
 
-## Blocksize Raw
+**Blocksize Raw**
 ![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/blocks_raw.PNG)
 
-## Blocksize Graph
+**Blocksize Graph**
 ![alt text](https://raw.github.com/micallef25/Project1-CUDA-Flocking/master/images/blocksize.png)
 
 For the coherent uniform grid: did you experience any performance improvements with the more coherent uniform grid? Was this the outcome you expected? Why or why not?
