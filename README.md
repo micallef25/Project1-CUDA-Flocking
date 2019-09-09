@@ -6,7 +6,7 @@ Project 1 - Flocking**
   
 * Tested on: Windows 10, i7-6700 @ 3.4GHz 16GB, Nvidia Quadro P1000 (Moore 100B Lab)
 
-### 10000 Boids Video
+### 10000 Boids Video ( click img )
 
 [![Watch the video](https://img.youtube.com/vi/PD1hAzGXRkg/0.jpg)](https://youtu.be/PD1hAzGXRkg)
 
@@ -44,5 +44,5 @@ Another hypothesis is that since our reads are a bit more contiguous in nature n
 
 **Did changing cell width and checking 27 vs 8 neighboring cells affect performance? Why or why not? Be careful: it is insufficient (and possibly incorrect) to say that 27-cell is slower simply because there are more cells to check!**
 
-Yes, the system actually slowed down about 50% when increasing from 8 to 27. I was not expecting this 
+Yes, the system actually slowed down about 50% when increasing from 8 to 27. I was not expecting this. I checked this with 10,000 boids and 20,000 boids with the coherent algorithm. In both these situations the FPS was halved. I saw the same results when increasing the amount of neighbors. My expectation was a 5 atmost 10% reduction. The algorithm will require reading more memory but with more neighbors but with a blocksize of 128 I figured most of the latency would be hidden. This oddly, was not the case. 
 
