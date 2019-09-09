@@ -446,7 +446,7 @@ __global__ void kernComputeIndices(int N, int gridResolution,
   
   
   // TODO-2.1
-    // - Label each boid with the index of its grid cell. unsure why we use grind min ... 
+    // - Label each boid with the index of its grid cell. 
   glm::ivec3 BoidPos = (pos[tid] - gridMin) * inverseCellWidth;
   gridIndices[tid] = gridIndex3Dto1D(BoidPos.x, BoidPos.y, BoidPos.z,gridResolution);
     // - Set up a parallel array of integer indices as pointers to the actual
@@ -481,12 +481,11 @@ __global__ void kernIdentifyCellStartEnd(int N, int *particleGridIndices,
     gridCellStartIndices[cell] = 0; // start 
 
   else if( tid == N-1 )
-      gridCellEndIndices[cell] = N-1; // end
-
+      gridCellEndIndices[cell] = N-1; // end 
+  
   else if( cell != next_cell ) // cell != cell + 1  
   {
-//	int next_cell = particleGridIndices[tid + 1];
-	gridCellStartIndices[next_cell] = tid+1;
+    gridCellStartIndices[next_cell] = tid+1;
     gridCellEndIndices[cell] = tid;
   }
 
@@ -528,7 +527,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 		return;
 	}
 
-	// get the boid to compute
+	// get the boid index to see the grid we placed ourself into
 	glm::ivec3 boid = (pos[tid] - gridMin) * inverseCellWidth;
 	
 
@@ -556,7 +555,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 					// traverse through start until end
 					for (int indice = gridCellStartIndices[Cell]; indice <= gridCellEndIndices[Cell]; indice++)
 					{
-						// this boid is the to check with its data finally
+						// this boid is one to check with its data finally
 						int boid_idx = particleArrayIndices[indice];
 						//dont compute yourself similar to naive now compute the rules
 						if (boid_idx != tid)
@@ -618,7 +617,8 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
   // - Access each boid in the cell and compute velocity change from
   //   the boids rules, if this boid is within the neighborhood distance.
   // - Clamp the speed change before putting the new speed in vel2
-		// this is almost the same code as the naive brute force ... maybe reuse some code eh? just the loop is different
+  
+	// this is the same routine as before except we reordered our grid so we have one less table read
 	float distance = 0.0f;
 	int neighbor1 = 0;
 	int neighbor3 = 0;
@@ -639,7 +639,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 		return;
 	}
 
-	// get the boid to compute
+	// fingure our grid or what bin we would be dumped into
 	glm::ivec3 boid = (pos[tid] - gridMin) * inverseCellWidth;
 
 
@@ -672,7 +672,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 						if (indice != tid)
 						{
 							// these are coherent positions. The only difference is from the grid is we do not now have to
-							// get hte boid idx. So 1 less memory read per thread.
+							// get hte boid idx. So a little less memory read per thread.
 							distance = glm::distance(pos[indice], pos[tid]);
 							determine_distances(tid, indice, distance, &neighbor1, &neighbor3, &perceived_center, &perceived_velocity, &small_distance_away, pos, vel1);
 						}
@@ -728,15 +728,18 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   kernComputeIndices << < boidsblockspergrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
   checkCUDAErrorWithLine("compute indices");
 
+// now that we have placed boids in grids we can sort
   thrust::device_ptr<int> keys(dev_particleGridIndices);
   thrust::device_ptr<int> values(dev_particleArrayIndices);
 
   thrust::sort_by_key(keys,keys+numObjects,values); 
   checkCUDAErrorWithLine("thrust");
 
+// 
   kernIdentifyCellStartEnd << < boidsblockspergrid, blockSize >> > (numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
   checkCUDAErrorWithLine("cell end");
 
+// the "update" 
   kernUpdateVelNeighborSearchScattered << < boidsblockspergrid, blockSize >> > (numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
   checkCUDAErrorWithLine("neighbor search failed");
   // Uniform Grid Neighbor search using Thrust sort.
